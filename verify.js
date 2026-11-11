@@ -88,6 +88,29 @@ function checkHtml(file) {
     stats.refsChecked++;
     if (!fs.existsSync(target)) fail(path.relative(ROOT, file) + ': broken reference ' + ref);
   }
+
+  /* srcset candidates must exist too (responsive images). */
+  const srcsetRe = /srcset="([^"]+)"/g;
+  while ((m = srcsetRe.exec(html))) {
+    m[1].split(',').forEach(function (candidate) {
+      const ref = candidate.trim().split(/\s+/)[0];
+      if (!ref || /^(https?:|data:)/i.test(ref)) return;
+      const target = path.resolve(path.dirname(file), decodeURIComponent(ref.split(/[?#]/)[0]));
+      stats.refsChecked++;
+      if (!fs.existsSync(target)) fail(path.relative(ROOT, file) + ': broken srcset ' + ref);
+    });
+  }
+
+  /* Accessibility regressions: alt text, landmark, drawer, keyboard dots. */
+  const imgRe = /<img\b([^>]*)>/gi;
+  while ((m = imgRe.exec(html))) {
+    if (!/\balt=/.test(m[1])) fail(path.relative(ROOT, file) + ': <img> without alt');
+  }
+  if (!/<main\b/.test(html)) fail(path.relative(ROOT, file) + ': missing <main> landmark');
+  if (!/<html lang="[^"]+"/.test(html)) fail(path.relative(ROOT, file) + ': missing html lang');
+  if (!/id="nav-toggle"/.test(html)) fail(path.relative(ROOT, file) + ': missing nav toggle');
+  if (!/id="nav-drawer"/.test(html)) fail(path.relative(ROOT, file) + ': missing nav drawer');
+  if (!/aria-expanded="false"/.test(html)) fail(path.relative(ROOT, file) + ': missing aria-expanded');
 }
 
 PAGES.forEach(function (p) { checkHtml(path.join(ROOT, p)); });
@@ -109,6 +132,12 @@ while ((cm = urlRe.exec(css))) {
   const target = path.resolve(path.join(ROOT, 'css'), cm[1].split(/[?#]/)[0]);
   if (!fs.existsSync(target)) fail('css/site.css: broken url() ' + cm[1]);
 }
+/* Design-system / a11y regressions in the stylesheet. */
+[':focus-visible', 'prefers-reduced-motion', '--tap: 44px',
+ '--orange-on-light', '--orange-on-blue', '--fs-xs', '--sp-4'].forEach(function (token) {
+  if (css.indexOf(token) === -1) fail('css/site.css: missing design token or a11y rule ' + token);
+});
+console.log('[3c] CSS design tokens + a11y rules: 7 markers present');
 const deadKeys = baseKeys.filter(k => !stats.keysUsed.has(k));
 if (deadKeys.length) console.log('[3b] unused dictionary keys (' + deadKeys.length + '): ' + deadKeys.join(', '));
 
@@ -153,7 +182,8 @@ const targets = ['/index.html', '/about.html', '/product.html', '/info.html', '/
   '/guestbook.html', '/contact.html', '/page-4.html', '/page-10.html',
   '/en/index.html', '/vi/about.html', '/zhtw/product.html', '/zh/guestbook.html',
   '/css/site.css', '/js/i18n-data.js', '/js/i18n.js', '/js/site.js',
-  '/images/logo.png', '/images/banner-forest.jpg', '/images/product1.jpg', '/images/footer-bg.jpg'];
+  '/images/logo.png', '/images/banner-forest.jpg', '/images/product1.jpg',
+  '/images/product1-sm.jpg', '/images/footer-bg.jpg'];
 
 function fetch(port, url) {
   return new Promise(function (resolve, reject) {

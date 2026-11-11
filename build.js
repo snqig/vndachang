@@ -39,6 +39,20 @@ const PAGES = [
   { file: 'page-10.html', key: 'page-10', title: 'page.title.page-10', h1: 'p10.title', h2: 'contact.cn' }
 ];
 
+/* Intrinsic sizes let the browser reserve space before lazy images load (no CLS). */
+const IMG_SIZE = {
+  'logo.png': [420, 137],
+  'news-banner.jpg': [600, 380],
+  'case1.jpg': [600, 400],
+  'case2.jpg': [544, 302],
+  'case3.jpg': [600, 400],
+  'product': [600, 450],
+  'ico': [240, 240],
+  'page': [120, 120],
+  'page9': [360, 360],
+  'page10': [360, 360]
+};
+
 function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -53,10 +67,11 @@ function txt(lang, key, tag, attrs) {
   const a = attrs ? ' ' + attrs : '';
   return '<' + tag + ' data-i18n="' + key + '"' + a + '>' + esc(t(lang, key)) + '</' + tag + '>';
 }
-function attrNode(tag, key, lang, attrs) {
-  return '<' + tag + ' data-i18n="' + key + '" data-i18n-attr="' +
-    (attrs.attr || 'content') + '" ' + (attrs.rest || '') + '>';
+function dims(kind, n) {
+  const d = IMG_SIZE[kind] || IMG_SIZE[kind.replace(/\d+$/, '')];
+  return d ? ' width="' + d[0] + '" height="' + d[1] + '"' : '';
 }
+function lazyAttrs() { return ' loading="lazy" decoding="async"'; }
 
 /* ---------------- shared chrome ---------------- */
 function header(lang, prefix, active) {
@@ -78,6 +93,14 @@ function header(lang, prefix, active) {
       '</a></li>';
   }).join('');
 
+  const drawerNav = NAV.map(function (n) {
+    return '<a href="' + n.file + '"' + (n.file === active ? ' class="active"' : '') + '>' +
+      '<span data-i18n="' + n.cn + '">' + esc(t(lang, n.cn)) + '</span></a>';
+  }).join('');
+
+  const menuLabel = esc(t(lang, 'nav.menu'));
+  const closeLabel = esc(t(lang, 'nav.close'));
+
   return `
 <div id="k-t"><div class="w1000">
   <div id="keywords">${kws.join(' ')}</div>
@@ -87,9 +110,16 @@ function header(lang, prefix, active) {
   </div>
 </div></div>
 <div id="head"><div class="w1000 logo-tel">
-  <div id="logo"><a href="index.html"><img src="${prefix}images/logo.png" data-i18n="brand.alt" data-i18n-attr="alt" alt="${esc(t(lang, 'brand.alt'))}"></a></div>
+  <div id="logo"><a href="index.html"><img src="${prefix}images/logo.png"${dims('logo.png')} fetchpriority="high" alt="${esc(t(lang, 'brand.alt'))}" data-i18n="brand.alt" data-i18n-attr="alt"></a></div>
   <div id="nav"><ul class="nav-ul">${nav}</ul></div>
-</div></div>`;
+  <button id="nav-toggle" type="button" aria-label="${menuLabel}" data-i18n="nav.menu" data-i18n-attr="aria-label" aria-expanded="false" aria-controls="nav-drawer"><span class="bar"></span><span class="bar"></span><span class="bar"></span></button>
+</div></div>
+<div id="nav-backdrop" class="nav-backdrop" aria-hidden="true"></div>
+<nav id="nav-drawer" class="nav-drawer" aria-label="${menuLabel}" aria-hidden="true">
+  <div class="drawer-head"><h2 data-i18n="nav.menu">${menuLabel}</h2><button type="button" class="drawer-close" aria-label="${closeLabel}" data-i18n="nav.close" data-i18n-attr="aria-label">×</button></div>
+  <div class="drawer-nav">${drawerNav}</div>
+  <div class="drawer-lang"><span class="lang-label" data-i18n="lang.label">${esc(t(lang, 'lang.label'))}</span><div class="lang-buttons">${langButtons}</div></div>
+</nav>`;
 }
 
 function hero(lang, prefix) {
@@ -100,7 +130,7 @@ function hero(lang, prefix) {
       '</div>';
   }).join('');
   const dots = [1, 2, 3, 4].map(function (i) {
-    return '<li class="' + (i === 1 ? 'current' : '') + '"></li>';
+    return '<li class="' + (i === 1 ? 'current' : '') + '" role="button" tabindex="0" aria-label="' + i + '"></li>';
   }).join('');
   return `<div id="banner">${slides}<ul id="pagination">${dots}</ul></div>`;
 }
@@ -161,15 +191,24 @@ function featureRow(lang, prefix) {
   let out = '<ul class="iabt-ul">';
   for (let i = 1; i <= 5; i++) {
     const href = 'page-' + (i + 3) + '.html';
-    out += '<li><a href="' + href + '"><img src="' + prefix + 'images/ico' + i + '.jpg" alt="">' +
+    out += '<li><a href="' + href + '"><img src="' + prefix + 'images/ico' + i + '.jpg"' +
+      dims('ico' + i) + lazyAttrs() + ' alt="' + esc(t(lang, 'feature.' + i)) +
+      '" data-i18n="feature.' + i + '" data-i18n-attr="alt">' +
       txt(lang, 'feature.' + i, 'p') + '</a></li>';
   }
   return out + '</ul>';
 }
 
 function productCard(lang, prefix, i, grid) {
+  const full = prefix + 'images/product' + i + '.jpg';
+  const small = prefix + 'images/product' + i + '-sm.jpg';
+  const sizes = grid
+    ? '(max-width: 480px) 92vw, (max-width: 768px) 46vw, 224px'
+    : '(max-width: 768px) 92vw, 224px';
   return '<div class="pro-card"><a href="product.html">' +
-    '<img src="' + prefix + 'images/product' + i + '.jpg" alt="" data-i18n="product.' + i + '" data-i18n-attr="alt">' +
+    '<img src="' + full + '" srcset="' + small + ' 320w, ' + full + ' 600w" ' +
+    'sizes="' + sizes + '"' + dims('product' + i) + lazyAttrs() +
+    ' alt="' + esc(t(lang, 'product.' + i)) + '" data-i18n="product.' + i + '" data-i18n-attr="alt">' +
     '<p data-i18n="product.' + i + '">' + esc(t(lang, 'product.' + i)) + '</p>' +
     '</a></div>';
 }
@@ -178,9 +217,9 @@ function body(lang, prefix, page) {
   switch (page.key) {
     case 'index': {
       const cards = [];
-      for (let i = 1; i <= 10; i++) cards.push(productCard(lang, prefix, i, false));
+      for (let i = 1; i <= 10; i++) cards.push(productCard(lang, prefix, i));
       const proDots = [0, 1, 2].map(function (i) {
-        return '<span class="' + (i === 0 ? 'current' : '') + '"></span>';
+        return '<span class="' + (i === 0 ? 'current' : '') + '" role="button" tabindex="0" aria-label="' + (i + 1) + '"></span>';
       }).join('');
       const newsItems = [1, 2, 3].map(function (i) {
         return '<li><a href="info.html"><span class="date" data-i18n="news.' + i + '.date">' + esc(t(lang, 'news.' + i + '.date')) +
@@ -199,12 +238,13 @@ function body(lang, prefix, page) {
     ${secTitle(lang, 'products.en', 'products.cn', true)}
     <div class="pro-viewport"><div id="pro-track">${cards.join('')}</div></div>
     <div class="pro-dots">${proDots}</div>
+    <p class="more-wrap pro-more-mobile"><a class="more-link" href="product.html" data-i18n="common.view">${esc(t(lang, 'common.view'))}</a></p>
   </div>
 </div>
 <div class="w1000 inews">
   ${secTitle(lang, 'news.en', 'news.cn', false)}
   <div class="inews-box">
-    <div class="news-photo"><img src="${prefix}images/news-banner.jpg" alt="" data-i18n="news.cn" data-i18n-attr="alt"><span class="pager">1</span></div>
+    <div class="news-photo"><img src="${prefix}images/news-banner.jpg"${dims('news-banner.jpg')}${lazyAttrs()} alt="${esc(t(lang, 'news.cn'))}" data-i18n="news.cn" data-i18n-attr="alt"><span class="pager">1</span></div>
     <div class="news-main"><ul class="inews-ul">${newsItems}</ul>
       <p class="more-wrap left"><a class="more-link" href="info.html" data-i18n="common.view">${esc(t(lang, 'common.view'))}</a></p>
     </div>
@@ -247,8 +287,9 @@ function body(lang, prefix, page) {
     }
     case 'case': {
       const cards = [1, 2, 3].map(function (i) {
-        return '<div class="case-card"><img src="' + prefix + 'images/case' + i + '.jpg" alt="' +
-          esc(t(lang, 'case.' + i + '.title')) + '" data-i18n="case.' + i + '.title" data-i18n-attr="alt">' +
+        const f = 'case' + i + '.jpg';
+        return '<div class="case-card"><img src="' + prefix + 'images/' + f + '"' + dims(f) + lazyAttrs() +
+          ' alt="' + esc(t(lang, 'case.' + i + '.title')) + '" data-i18n="case.' + i + '.title" data-i18n-attr="alt">' +
           '<div class="txt"><h3 data-i18n="case.' + i + '.title">' + esc(t(lang, 'case.' + i + '.title')) + '</h3>' +
           '<p data-i18n="case.' + i + '.desc">' + esc(t(lang, 'case.' + i + '.desc')) + '</p></div></div>';
       }).join('');
@@ -295,9 +336,10 @@ function body(lang, prefix, page) {
       const img = iconIndex >= 1 && iconIndex <= 5
         ? prefix + 'images/ico' + iconIndex + '.jpg'
         : prefix + 'images/page' + n + '.jpg';
+      const sizeKey = iconIndex >= 1 && iconIndex <= 5 ? 'ico' + iconIndex : 'page' + n;
       return `<div class="w1000 page-body"><h2 data-i18n="p${n}.title">${esc(t(lang, 'p' + n + '.title'))}</h2>
   <div class="feature-detail">
-    <img src="${img}" alt="">
+    <img src="${img}"${dims(sizeKey)}${lazyAttrs()} alt="${esc(t(lang, 'p' + n + '.title'))}" data-i18n="p${n}.title" data-i18n-attr="alt">
     <div class="txt"><p class="lead" data-i18n="p${n}.desc">${esc(t(lang, 'p' + n + '.desc'))}</p>
       <p class="lead" data-i18n="about.philosophy">${esc(t(lang, 'about.philosophy'))}</p></div>
   </div></div>`;
@@ -332,8 +374,10 @@ function render(lang, prefix, page) {
 </head>
 <body>
 ${chrome}
+<main id="main">
 ${top}
 ${body(lang, prefix, page)}
+</main>
 ${footer(lang, prefix)}
 </body>
 </html>

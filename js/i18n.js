@@ -72,6 +72,17 @@
       'zh';
   }
 
+  /* aria-labels on the drawer are intentionally NOT data-i18n nodes, because
+     the drawer wraps other translatable elements (nested keys are forbidden). */
+  function updateAria(dict) {
+    var toggle = document.getElementById('nav-toggle');
+    var panel = document.getElementById('nav-drawer');
+    var close = document.querySelector('.drawer-close');
+    if (toggle && dict['nav.menu']) { toggle.setAttribute('aria-label', dict['nav.menu']); }
+    if (panel && dict['nav.menu']) { panel.setAttribute('aria-label', dict['nav.menu']); }
+    if (close && dict['nav.close']) { close.setAttribute('aria-label', dict['nav.close']); }
+  }
+
   function translate(lang, userAction) {
     var dict = window.I18N && window.I18N[lang];
     if (!dict) { return; }
@@ -97,12 +108,15 @@
       }
     }
 
-    var buttons = document.querySelectorAll('#lang-switch button[data-lang]');
+    updateAria(dict);
+
+    /* Both the desktop top bar and the mobile drawer carry language buttons. */
+    var buttons = document.querySelectorAll('button[data-lang]');
     for (var k = 0; k < buttons.length; k++) {
       var b = buttons[k];
-      if (b.getAttribute('data-lang') === lang) { b.className = 'active'; }
-      else { b.className = ''; }
-      b.setAttribute('aria-pressed', b.getAttribute('data-lang') === lang ? 'true' : 'false');
+      var on = b.getAttribute('data-lang') === lang;
+      if (on) { b.classList.add('active'); } else { b.classList.remove('active'); }
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
 
     window.currentLang = lang;
@@ -124,9 +138,8 @@
 
   function init() {
     translate(detect(), false);
-    var bar = document.getElementById('lang-switch');
-    if (!bar) { return; }
-    bar.addEventListener('click', function (ev) {
+    /* Delegated so the mobile drawer's own button set works too. */
+    document.addEventListener('click', function (ev) {
       var btn = ev.target.closest ? ev.target.closest('button[data-lang]') : null;
       if (!btn) { return; }
       var lang = btn.getAttribute('data-lang');
