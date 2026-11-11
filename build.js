@@ -247,7 +247,8 @@ function body(lang, prefix, page) {
     }
     case 'case': {
       const cards = [1, 2, 3].map(function (i) {
-        return '<div class="case-card"><img src="' + prefix + 'images/case' + i + '.jpg" alt="">' +
+        return '<div class="case-card"><img src="' + prefix + 'images/case' + i + '.jpg" alt="' +
+          esc(t(lang, 'case.' + i + '.title')) + '" data-i18n="case.' + i + '.title" data-i18n-attr="alt">' +
           '<div class="txt"><h3 data-i18n="case.' + i + '.title">' + esc(t(lang, 'case.' + i + '.title')) + '</h3>' +
           '<p data-i18n="case.' + i + '.desc">' + esc(t(lang, 'case.' + i + '.desc')) + '</p></div></div>';
       }).join('');
