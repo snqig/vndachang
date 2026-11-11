@@ -15,6 +15,14 @@
     } catch (e) { return null; }
   }
 
+  /* A URL inside /zh/, /zhtw/, /en/, /vi/ is an explicit language choice. */
+  function pathLang() {
+    try {
+      var m = window.location.pathname.match(/(?:^|\/)(zh|zhtw|en|vi)(?:\/|$)/);
+      return m ? m[1] : null;
+    } catch (e) { return null; }
+  }
+
   function storedLang() {
     try {
       var v = window.localStorage.getItem(STORE_KEY);
@@ -22,13 +30,49 @@
     } catch (e) { return null; }
   }
 
-  function detect() {
-    return queryLang() ||
-      (valid(window.DEFAULT_LANG) ? window.DEFAULT_LANG : null) ||
-      storedLang() || 'zh';
+  /* Map an OS / browser locale to one of the four site languages. */
+  function mapLocale(raw) {
+    var s = String(raw || '').toLowerCase().replace(/_/g, '-');
+    if (!s) { return null; }
+    var parts = s.split('-');
+    var base = parts[0];
+    var rest = parts.slice(1).join('-');
+    if (base === 'vi') { return 'vi'; }
+    if (base === 'en') { return 'en'; }
+    if (base === 'zh') {
+      return /hant|tw|hk|mo/.test(rest) ? 'zhtw' : 'zh';
+    }
+    return null;
   }
 
-  function translate(lang) {
+  function browserLang() {
+    var list = [];
+    try {
+      if (navigator.languages && navigator.languages.length) {
+        list = list.concat(Array.prototype.slice.call(navigator.languages));
+      }
+    } catch (e) {}
+    try { if (navigator.language) { list.push(navigator.language); } } catch (e) {}
+    try { if (navigator.userLanguage) { list.push(navigator.userLanguage); } } catch (e) {}
+    for (var i = 0; i < list.length; i++) {
+      var l = mapLocale(list[i]);
+      if (l) { return l; }
+    }
+    return null;
+  }
+
+  /* Priority: explicit ?lang= > language directory > user's manual choice
+     > OS/browser language > baked default > zh. */
+  function detect() {
+    return queryLang() ||
+      pathLang() ||
+      storedLang() ||
+      browserLang() ||
+      (valid(window.DEFAULT_LANG) ? window.DEFAULT_LANG : null) ||
+      'zh';
+  }
+
+  function translate(lang, userAction) {
     var dict = window.I18N && window.I18N[lang];
     if (!dict) { return; }
 
@@ -62,26 +106,31 @@
     }
 
     window.currentLang = lang;
-    try { window.localStorage.setItem(STORE_KEY, lang); } catch (e) {}
-    try {
-      var url = new URL(window.location.href);
-      url.searchParams.set('lang', lang);
-      window.history.replaceState(null, '', url.toString());
-    } catch (e) {}
+
+    /* Only a manual click is persisted. Auto-detection stays fresh so a change
+       of OS/browser language is picked up on the next visit. */
+    if (userAction) {
+      try { window.localStorage.setItem(STORE_KEY, lang); } catch (e) {}
+      try {
+        var url = new URL(window.location.href);
+        url.searchParams.set('lang', lang);
+        window.history.replaceState(null, '', url.toString());
+      } catch (e) {}
+    }
     try {
       document.dispatchEvent(new CustomEvent('dc:langchange', { detail: { lang: lang } }));
     } catch (e) {}
   }
 
   function init() {
-    translate(detect());
+    translate(detect(), false);
     var bar = document.getElementById('lang-switch');
     if (!bar) { return; }
     bar.addEventListener('click', function (ev) {
       var btn = ev.target.closest ? ev.target.closest('button[data-lang]') : null;
       if (!btn) { return; }
       var lang = btn.getAttribute('data-lang');
-      if (valid(lang)) { translate(lang); }
+      if (valid(lang)) { translate(lang, true); }
     });
   }
 
